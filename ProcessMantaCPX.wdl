@@ -3,7 +3,7 @@ version 1.0
 workflow ProcessMantaCPX {
     input {
         File manta_tarball
-        Array[String] pe_file_urls
+        Array[String] pesr_disc
         File mei_bed
         File cytobands_bed
         String docker_image
@@ -17,10 +17,10 @@ workflow ProcessMantaCPX {
     }
 
     # Download PE files
-    scatter (pe_file_url in pe_file_urls) {
+    scatter (pesr_disc in pesr_discs) {
         call DownloadFiles {
             input:
-                file_url = pe_file_url,
+                file_url = pesr_disc,
                 docker_image = docker_image
         }
     }
@@ -48,5 +48,65 @@ workflow ProcessMantaCPX {
     call Cluster {
         input:
             docker_image = docker_image
+    }
+}
+
+task DownloadFiles {
+    input {
+        String file_url
+        String docker_image
+    }
+
+    command {
+        gsutil cp ~{file_url} .
+    }
+
+    output {
+        File downloaded_file = basename(file_url)
+    }
+
+    runtime {
+        docker: docker_image
+    }
+}
+
+task ExtractManta {
+    input {
+        File manta_tarball
+        String docker_image
+    }
+
+    command {
+        tar -xzf ~{manta_tarball}
+    }
+
+    output {
+        Array[File] vcf_files = glob("*.vcf.gz")
+    }
+
+    runtime {
+        docker: docker_image
+    }
+}
+
+task RunSvtkResolved {
+    input {
+        File vcf_file
+        File pesr_disc
+        File mei_bed
+        File cytobands_bed
+        String docker_image
+    }
+
+    command {
+        bash run_svtk_resolved.sh ~{vcf_file} ~{pesr_disc} ~{basename(pesr_disc, ".pe.txt.gz")} ~{mei_bed} ~{cytobands_bed}
+    }
+
+    output {
+        File unresolved_vcf = basename(pesr_disc, ".pe.txt.gz") + ".manta.unresolved.vcf.gz"
+    }
+
+    runtime {
+        docker: docker_image
     }
 }
